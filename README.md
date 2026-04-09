@@ -1,6 +1,6 @@
 # deps
 
-TUI package manager for Python. Browse installed packages, check for updates, and install 
+TUI package manager for Python. Browse installed packages, check for updates, and install
 new ones from PyPI — all from a single interactive terminal interface.
 
 - [Installation](#installation)
