@@ -40,29 +40,3 @@ deps
 ```
 
 `deps` auto-detects the Python interpreter (checks `.venv/` first, then `PATH`) and package manager (`uv` or `pip`).
-
-**Flags:**
-
-| Flag              | Description                                    |
-| ----------------- | ---------------------------------------------- |
-| `-p`, `--python`  | Path to Python interpreter                     |
-| `-m`, `--manager` | Package manager: `pip` or `uv` (auto-detected) |
-| `-v`, `--version` | Print version and exit                         |
-
-**Keyboard Shortcuts:**
-
-| Key            | Action                               |
-| -------------- | ------------------------------------ |
-| `↑/↓` or `k/j` | Navigate packages                    |
-| `/`            | Search installed packages            |
-| `Tab`          | Switch between local and PyPI search |
-| `Enter`        | Update selected / confirm            |
-| `→` or `l`     | Browse available versions            |
-| `i`            | Show package info                    |
-| `Space`        | Select package                       |
-| `a`            | Select all outdated                  |
-| `A`            | Select all                           |
-| `s`            | Toggle sort (name / outdated first)  |
-| `Ctrl+R`       | Reload package list / PyPI index     |
-| `Esc`          | Back / clear selection               |
-| `q`            | Quit                                 |
