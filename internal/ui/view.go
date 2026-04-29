@@ -50,8 +50,8 @@ func (m Model) View() tea.View {
 }
 
 func (m *Model) renderHeader(b *strings.Builder) {
-	title := fmt.Sprintf(" deps (%s) - %s (%s) (%s)",
-		m.version, m.env.PythonPath, m.env.PythonVersion, m.env.Manager)
+	title := fmt.Sprintf(" deps %s - %s (%s) (%s)",
+		m.build.Display(), m.env.PythonPath, m.env.PythonVersion, m.env.Manager)
 	header := styleHeader.Width(m.width).Render(title)
 	b.WriteString(header)
 	b.WriteString("\n\n")

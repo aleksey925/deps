@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/aleksey925/deps/internal/cli"
 	"github.com/aleksey925/deps/internal/python"
 )
 
@@ -57,7 +58,7 @@ type packageItem struct {
 }
 
 type Model struct {
-	version         string
+	build           cli.BuildInfo
 	env             *python.Environment
 	packages        []packageItem
 	filtered        []int
@@ -128,7 +129,7 @@ type packageInfoMsg struct {
 	err  error
 }
 
-func NewModel(env *python.Environment, version string) Model {
+func NewModel(env *python.Environment, build cli.BuildInfo) Model {
 	ti := textinput.New()
 	ti.Prompt = "  Search [local]: "
 	ti.CharLimit = 100
@@ -141,12 +142,12 @@ func NewModel(env *python.Environment, version string) Model {
 	ti.SetStyles(styles)
 
 	return Model{
-		version: version,
-		env:     env,
-		search:  ti,
-		mode:    viewTable,
-		height:  24,
-		width:   80,
+		build:  build,
+		env:    env,
+		search: ti,
+		mode:   viewTable,
+		height: 24,
+		width:  80,
 	}
 }
 
