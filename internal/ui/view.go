@@ -37,7 +37,7 @@ func (m Model) View() tea.View {
 		content = m.overlayReloadConfirm(content)
 	case viewPackageInfo:
 		content = m.overlayPackageInfo(content)
-	case viewTable, viewSearch:
+	case viewTable, viewSearch, viewPypiTable:
 		// no overlay
 	}
 
@@ -65,7 +65,7 @@ func (m *Model) renderSearchBar(b *strings.Builder) {
 		b.WriteString(styleUpdating.Render("  ⏳ Fetching versions for " + m.pypiPackageName + "…"))
 	case m.pypiLoading:
 		b.WriteString(styleUpdating.Render("  ⏳ Loading PyPI package index…"))
-	case m.mode == viewSearch || m.search.Value() != "":
+	case m.mode == viewSearch || m.mode == viewPypiTable || m.search.Value() != "":
 		b.WriteString(m.search.View())
 	default:
 		b.WriteString(styleDim.Render("  / to search"))
@@ -74,7 +74,7 @@ func (m *Model) renderSearchBar(b *strings.Builder) {
 }
 
 func (m *Model) renderTable(b *strings.Builder) {
-	if m.searchMode == searchPypi && (m.mode == viewSearch || m.prevMode == viewSearch) {
+	if m.searchMode == searchPypi {
 		m.renderPypiTable(b)
 		return
 	}
@@ -215,8 +215,10 @@ func (m *Model) renderFooter(b *strings.Builder) {
 
 	var hints string
 	switch {
+	case m.mode == viewPypiTable:
+		hints = "↑/↓ navigate  enter/→ install  i info  / search  tab local  ctrl+r reload  esc back  q quit"
 	case m.mode == viewSearch && m.searchMode == searchPypi:
-		hints = "esc clear  tab local  ↑/↓ navigate  enter/→ versions  i info  ctrl+r reload"
+		hints = "esc clear  tab local  ↓/enter results  ctrl+r reload"
 	case m.mode == viewSearch:
 		hints = "esc clear  tab PyPI  ↓ table  enter confirm"
 	default:
@@ -224,7 +226,7 @@ func (m *Model) renderFooter(b *strings.Builder) {
 	}
 
 	var right string
-	if m.mode == viewSearch && m.searchMode == searchPypi {
+	if m.searchMode == searchPypi {
 		right = fmt.Sprintf("%d results", len(m.pypiResults))
 	} else {
 		selectedCount := 0

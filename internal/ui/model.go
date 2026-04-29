@@ -26,6 +26,7 @@ type viewMode int
 const (
 	viewTable viewMode = iota
 	viewSearch
+	viewPypiTable
 	viewVersions
 	viewConfirm
 	viewUpdating
@@ -86,7 +87,6 @@ type Model struct {
 	pypiPackageName string
 	pypiLoading     bool
 	packageInfo     *python.PackageInfo
-	prevMode        viewMode
 }
 
 type updateResult struct {
@@ -465,6 +465,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case viewSearch:
 		return m.handleSearchKey(msg)
+	case viewPypiTable:
+		return m.handlePypiTableKey(msg)
 	case viewVersions:
 		return m.handleVersionsKey(msg)
 	case viewConfirm:
@@ -482,6 +484,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleTableKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// avoid races while async info fetch is in flight (see handlePypiTableKey)
+	if m.pypiLoading {
+		if key.Matches(msg, keys.Quit) {
+			return m, tea.Quit
+		}
+		return m, nil
+	}
+
 	// vim-style navigation only in table mode
 	switch msg.String() {
 	case "k":
@@ -600,7 +610,7 @@ func (m Model) openVersions() (tea.Model, tea.Cmd) {
 
 func (m Model) showPackageInfo() (tea.Model, tea.Cmd) {
 	var name string
-	if m.searchMode == searchPypi && m.mode == viewSearch && len(m.pypiResults) > 0 {
+	if m.mode == viewPypiTable && len(m.pypiResults) > 0 {
 		name = m.pypiResults[m.pypiCursor]
 	} else {
 		idx := m.currentPackageIdx()
@@ -609,7 +619,6 @@ func (m Model) showPackageInfo() (tea.Model, tea.Cmd) {
 		}
 		name = m.packages[idx].pkg.Name
 	}
-	m.prevMode = m.mode
 	m.pypiLoading = true
 	m.pypiPackageName = name
 	return m, fetchPackageInfo(name)
@@ -641,33 +650,18 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-	case key.Matches(msg, keys.Down):
+	case key.Matches(msg, keys.Down), key.Matches(msg, keys.Enter):
 		if m.searchMode == searchPypi {
-			return m.movePypiCursor(1)
+			if len(m.pypiResults) == 0 {
+				return m, nil
+			}
+			m.mode = viewPypiTable
+			m.search.Blur()
+			return m, nil
 		}
 		m.mode = viewTable
 		m.search.Blur()
 		return m, nil
-
-	case key.Matches(msg, keys.Up):
-		if m.searchMode == searchPypi {
-			return m.movePypiCursor(-1)
-		}
-
-	case key.Matches(msg, keys.Info):
-		if m.searchMode == searchPypi && len(m.pypiResults) > 0 {
-			return m.showPackageInfo()
-		}
-
-	case key.Matches(msg, keys.Enter), key.Matches(msg, keys.Right):
-		if m.searchMode == searchPypi && len(m.pypiResults) > 0 {
-			return m.installPypiFromSearch()
-		}
-		if key.Matches(msg, keys.Enter) && m.searchMode == searchLocal {
-			m.mode = viewTable
-			m.search.Blur()
-			return m, nil
-		}
 	}
 
 	var cmd tea.Cmd
@@ -704,7 +698,7 @@ func (m Model) installPypiFromSearch() (tea.Model, tea.Cmd) {
 	m.pypiLoading = true
 	m.pypiPackageName = name
 	m.search.Blur()
-	m.mode = viewTable
+	m.mode = viewPypiTable
 	return m, fetchVersions(name)
 }
 
@@ -726,13 +720,78 @@ func (m Model) movePypiCursor(delta int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handlePypiTableKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// avoid races while async fetch (versions/info) is in flight: late-arriving
+	// messages would otherwise overwrite mode/state changed by intermediate keystrokes
+	if m.pypiLoading {
+		if key.Matches(msg, keys.Quit) {
+			return m, tea.Quit
+		}
+		return m, nil
+	}
+
+	switch {
+	case key.Matches(msg, keys.Quit):
+		return m, tea.Quit
+
+	case key.Matches(msg, keys.Escape):
+		m.mode = viewTable
+		m.search.SetValue("")
+		m.searchMode = searchLocal
+		m.setSearchPrompt()
+		m.pypiResults = nil
+		m.pypiCursor = 0
+		m.pypiOffset = 0
+		m.applyFilter()
+		return m, nil
+
+	case key.Matches(msg, keys.Search):
+		m.mode = viewSearch
+		return m, m.search.Focus()
+
+	case key.Matches(msg, keys.Tab):
+		m.searchMode = searchLocal
+		m.setSearchPrompt()
+		m.applyFilter()
+		m.mode = viewSearch
+		return m, m.search.Focus()
+
+	case key.Matches(msg, keys.Reload):
+		if m.pypiIndex != nil {
+			m.mode = viewReloadConfirm
+		}
+		return m, nil
+
+	case key.Matches(msg, keys.Up):
+		return m.movePypiCursor(-1)
+
+	case key.Matches(msg, keys.Down):
+		return m.movePypiCursor(1)
+
+	case key.Matches(msg, keys.Info):
+		if len(m.pypiResults) > 0 {
+			return m.showPackageInfo()
+		}
+		return m, nil
+
+	case key.Matches(msg, keys.Enter), key.Matches(msg, keys.Right):
+		if len(m.pypiResults) > 0 {
+			return m.installPypiFromSearch()
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
+
 func (m Model) handlePackageInfoKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keys.Escape), msg.Code == tea.KeyEnter:
 		m.packageInfo = nil
-		m.mode = m.prevMode
-		if m.mode == viewSearch {
-			return m, m.search.Focus()
+		if m.searchMode == searchPypi {
+			m.mode = viewPypiTable
+		} else {
+			m.mode = viewTable
 		}
 		return m, nil
 
@@ -766,9 +825,14 @@ func (m Model) handleVersionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	switch {
 	case key.Matches(msg, keys.Escape), key.Matches(msg, keys.Left):
+		wasPypiInstall := m.pypiInstall
 		m.pypiInstall = false
 		m.pypiPackageName = ""
-		m.mode = viewTable
+		if wasPypiInstall {
+			m.mode = viewPypiTable
+		} else {
+			m.mode = viewTable
+		}
 		return m, nil
 
 	case key.Matches(msg, keys.Up):
@@ -794,6 +858,10 @@ func (m Model) handleVersionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		ver := m.versions[m.verCursor]
 
 		if m.pypiInstall {
+			m.searchMode = searchLocal
+			m.setSearchPrompt()
+			m.search.SetValue("")
+			m.applyFilter()
 			m.mode = viewTable
 			return m, installPackage(m.env, m.pypiPackageName, ver)
 		}
