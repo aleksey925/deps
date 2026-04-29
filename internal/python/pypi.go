@@ -124,7 +124,10 @@ func FetchVersions(packageName string) ([]string, error) {
 		return nil, err
 	}
 
-	versions := stableVersions(data)
+	versions := make([]string, 0, len(data.Releases))
+	for v := range data.Releases {
+		versions = append(versions, v)
+	}
 
 	sort.Slice(versions, func(i, j int) bool {
 		return semver.Compare(versions[i], versions[j]) > 0
